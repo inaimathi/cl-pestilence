@@ -13,6 +13,7 @@
   :components ((:module
                 src :components
                 ((:file "package")
+		 (:file "util")
 		 (:file "cl-pestilence")
 
 		 (:module

@@ -33,7 +33,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;; Peeps
 (defclass peep ()
-  ((routine :initarg :routine :initform (list) :accessor routine)
+  ((plan
+    :initarg :plan :accessor plan
+    :initform (lambda (world)
+		(loop repeat (roll 2 :d 6)
+		   collect (pick world))))
    (todo :initarg :todo :initform nil :accessor todo)
    (health :initarg :health :initform 100 :accessor health)
    (plagues :initform nil :accessor plagues)
@@ -42,8 +46,7 @@
 (defun peep? (thing)
   (eq (find-class 'peep) (class-of thing)))
 
-(defun peep (&key places)
-  (make-instance 'peep :routine places :todo places))
+(defun peep () (make-instance 'peep))
 
 (defun health->string (health)
   (cond ((>= health 90) "@")
@@ -59,7 +62,7 @@
 	  (health->string (health peep)) (health peep)
 	  (mapcar
 	   (lambda (place) (first (tags place)))
-	   (routine peep))))
+	   (todo peep))))
 
 (defmethod show ((peep peep)) (health->string (health peep)))
 
@@ -94,9 +97,10 @@
 (defun gen-world (&key (num-places 20) (num-peeps 100))
   (let ((places (loop repeat num-places collect (gen-place))))
     (loop repeat num-peeps
-       do (let* ((routine (loop repeat 5 collect (pick places)))
-		 (peep (peep :places routine)))
-	    (push peep (occupants (first routine)))))
+       do (let* ((peep (peep :places routine))
+		 (todo (funcall (plan peep) places)))
+	    (setf (todo peep) todo)
+	    (push peep (occupants (first todo)))))
     places))
 
 (defmethod details ((world list))
@@ -112,7 +116,10 @@
   (loop for o in (occupants place) if (peep? o) collect o))
 
 (defmethod tick! ((world list))
-  (let ((peeps (all-peeps world)))
+  (let ((peeps (all-peeps world))
+	(recovery-amount (make-hash-table)))
+    (loop for p in peeps
+       do (setf (gethash p recovery-amount) (- 10 (length (todo p)))))
     (loop while peeps
        do (setf peeps
 		(loop for p = (pop peeps) while p
@@ -120,8 +127,9 @@
 		   if res collect res))
        do (mapc #'tick! world)
        do (format t "~a" (show world)))
-    (loop for p in (all-peeps world)
-       do (setf (todo p) (routine p))))
+    (loop for p being the hash-keys in recovery-amount using (hash-value v)
+       do (setf (todo p) (funcall (plan p) world)
+		(health p) (+ (health p) v))))
   world)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
