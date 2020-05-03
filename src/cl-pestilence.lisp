@@ -14,10 +14,13 @@
   (make-instance 'place :tags tags :occupants occupants))
 
 (defun gen-place ()
-  (let ((tag (pick '(:apartment-building :house :cottage
+  (let* ((tag (pick '(:apartment-building :house :cottage
 		     :office-building :factory :store
-		     :cafe :lounge :theater))))
-    (place :tags (list tag))))
+		      :cafe :lounge :theater)))
+	 (tags (if (member tag '(:apartment-building :house :cottage))
+		   (list tag :home)
+		   (list tag))))
+    (place :tags tags)))
 
 (defmethod details ((place place))
   (format nil "====================~%~a {~{~a~}}~%~{  ~a~^~%~}~%"
@@ -97,7 +100,7 @@
 (defun gen-world (&key (num-places 20) (num-peeps 100))
   (let ((places (loop repeat num-places collect (gen-place))))
     (loop repeat num-peeps
-       do (let* ((peep (peep :places routine))
+       do (let* ((peep (peep))
 		 (todo (funcall (plan peep) places)))
 	    (setf (todo peep) todo)
 	    (push peep (occupants (first todo)))))
@@ -129,7 +132,7 @@
        do (format t "~a" (show world)))
     (loop for p being the hash-keys in recovery-amount using (hash-value v)
        do (setf (todo p) (funcall (plan p) world)
-		(health p) (+ (health p) v))))
+		(health p) (min 100 (+ (health p) v)))))
   world)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -176,12 +179,11 @@
 (defmethod tick! ((peep peep))
   (unless (dead? peep)
     (let ((location (pop (todo peep))))
-      (incf (points peep))
-      (setf (occupants location) (remove peep (occupants location)))
-      (push peep (occupants (or (first (todo peep)) (first (routine peep)))))
-      (setf (health peep) (min 100 (+ 5 (health peep))))
       (mapc #'tick! (plagues peep))
-      (unless (empty? (todo peep))
+      (unless (or (empty? (todo peep)) (dead? peep))
+	(incf (points peep))
+	(setf (occupants location) (remove peep (occupants location)))
+	(push peep (occupants (first (todo peep))))
 	peep))))
 
 (defun dead? (thing) (>= 0 (health thing)))
@@ -200,7 +202,7 @@
 		 score)
 	:plague (let ((score 0))
 		  (loop for victim in (all-peeps world)
-		     do (loop for p in (plaguesvictim)
+		     do (loop for p in (plagues victim)
 			   do (incf score (max 0 (health p)))))
 		  (loop for target in world
 		     if (every
