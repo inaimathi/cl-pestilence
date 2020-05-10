@@ -6,7 +6,7 @@
   :author "Inaimathi <leo.zovic@gmail.com>"
   :license "AGPL3"
   :depends-on (#+sbcl
-	       #:alexandria #:anaphora #:cl-fad #:closer-mop
+	       #:alexandria #:cl-fad #:closer-mop
 	       #:cl-who #:cl-css #:parenscript #:ironclad
 	       #:house #:fact-base
 	       #:edit-distance)
@@ -15,6 +15,7 @@
                 ((:file "package")
 		 (:file "util")
 		 (:file "cl-pestilence")
+		 (:file "server")
 
 		 (:module
 		  front-end :components

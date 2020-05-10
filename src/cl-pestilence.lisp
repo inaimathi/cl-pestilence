@@ -7,6 +7,13 @@
    (occupants :initarg :occupants :initform nil :accessor occupants)
    (points :initform 0 :accessor points)))
 
+(defmethod json:encode-json ((p place) &optional stream)
+  (json:encode-json
+   (hash :tags (tags p)
+	 :occupants (occupants p)
+	 :points (points p))
+   stream))
+
 (defun place? (thing)
   (eq (find-class 'place) (class-of thing)))
 
@@ -43,8 +50,15 @@
 		   collect (pick world))))
    (todo :initarg :todo :initform nil :accessor todo)
    (health :initarg :health :initform 100 :accessor health)
-   (plagues :initform nil :accessor plagues)
-   (points :initform 0 :accessor points)))
+   (points :initform 0 :accessor points)
+   (plagues :initform nil :accessor plagues)))
+
+(defmethod json:encode-json ((p peep) &optional stream)
+  (json:encode-json
+   (hash :health (health p)
+	 :points (points p)
+	 :plagues (plagues p))
+   stream))
 
 (defun peep? (thing)
   (eq (find-class 'peep) (class-of thing)))
@@ -87,7 +101,14 @@
     :initform
     (lambda (plague peep)
       (feed! plague peep 30))
-    :reader strategy)))
+    :accessor strategy)))
+
+(defmethod json:encode-json ((p plague) &optional stream)
+  (json:encode-json
+   (hash :health (health p)
+	 :virulence (virulence p)
+	 :efficiency (efficiency p))
+   stream))
 
 (defun plague ()
   (make-instance 'plague))
@@ -141,11 +162,14 @@
   (member (signature plague) (mapcar #'signature (plagues peep))
 	  :test #'string=))
 
+(defun dead? (thing) (>= 0 (health thing)))
+
 ;;; Plague abilities
 (defmethod tick! ((plague plague))
-  (decf (health plague) 1)
-  (funcall (strategy plague) plague (host plague))
-  plague)
+  (unless (dead? plague)
+    (decf (health plague) 1)
+    (funcall (strategy plague) plague (host plague))
+    plague))
 
 (defmethod feed! ((self plague) target amount)
   (decf (health target) amount)
@@ -169,11 +193,21 @@
 		      do (infect! plague victim))))
   place)
 
-(defmethod heal! ((self place) (peep peep) amount)
-  (decf (points self) (* 2 amount))
-  (incf (health peep) amount))
+(defun pay! (a b amount)
+  (when (>= (points a) amount)
+    (decf (points a) amount)
+    (incf (points b) amount)))
 
-(defmethod vaccinat)
+(defmethod heal! ((self place) (peep peep) amount)
+  (decf (points self) amount)
+  (incf (health peep) (* 2 amount)))
+
+(defmethod vaccinate! ((self place) (plague plague) (peep peep))
+  (let ((plg (funcall (reproduce plague))))
+    (setf (strategy plg) (lambda (plague peep) (declare (ignorable plague peep)) nil)
+	  (health plg) 0
+	  (host plg) peep)
+    (push plg (plagues peep))))
 
 ;;; Peep abilities
 (defmethod tick! ((peep peep))
@@ -185,8 +219,6 @@
 	(setf (occupants location) (remove peep (occupants location)))
 	(push peep (occupants (first (todo peep))))
 	peep))))
-
-(defun dead? (thing) (>= 0 (health thing)))
 
 ;;; Game abilities
 (defun score (world)
@@ -211,21 +243,3 @@
 			 (all-peeps target))
 		     do (setf score (* 2  score)))
 		  score)))
-
-(house:define-handler (/) ()
-  (cl-who:with-html-output-to-string (s nil :prologue t :indent t)
-    (:html
-     (:head
-      (:title "cl-pestilence")
-
-      (:link :rel "stylesheet" :href "/css/pestilence.css")
-
-      (:script :type "text/javascript" :src "/js/base.js")
-      (:script :type "text/javascript" :src "/js/pestilence.js"))
-
-     (:body
-      (:h1 "Welcome to pestilence")))))
-
-(defun main (&optional argv &key (port 4141))
-  (declare (ignorable argv))
-  (house:start port))

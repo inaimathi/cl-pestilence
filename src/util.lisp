@@ -8,3 +8,9 @@
 
 (defun empty? (lst)
   (null lst))
+
+(defun hash (&rest entries)
+  (let ((h (make-hash-table)))
+    (loop for (k v) on entries by #'cddr
+       do (setf (gethash k h) v))
+    h))
